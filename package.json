@@ -14,11 +14,13 @@
     "@babel/parser": "^7.23.6",
     "@babel/traverse": "^7.23.7",
     "@babel/types": "^7.23.6",
+    "lodash": "^4.17.21",
     "vue-template-compiler": "2.6.x"
   },
   "devDependencies": {
     "@types/babel__generator": "^7.6.8",
     "@types/babel__traverse": "^7.20.5",
+    "@types/lodash": "^4.14.202",
     "@types/node": "^20.10.6",
     "tslib": "^2.6.2",
     "typescript": "^5.3.3"
