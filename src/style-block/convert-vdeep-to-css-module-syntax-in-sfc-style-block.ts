@@ -3,6 +3,7 @@ import scssSyntax from "postcss-scss"
 import selectorParser, { Pseudo, Combinator } from "postcss-selector-parser"
 import { readFileSync } from "fs"
 import { parseComponent } from "vue-template-compiler"
+import { CompilerException } from "@/utils/exception"
 
 function removeCwd(uri: string): string {
   return uri.replace(process.cwd() + "/", "")
@@ -24,7 +25,7 @@ const findTopLevelVDeep: Plugin = {
       if (rule.type === "rule") {
         // find file scope top level v-deep
         if (rule.selector.includes("::v-deep") && isFileScopeTopLevel(rule)) {
-          console.error(`文件${uri}中存在顶层::v-deep选择器：${rule.selector}，请手动处理。`)
+          throw new CompilerException(`文件${uri}中存在顶层::v-deep选择器：${rule.selector}，请手动处理。如果顶层dom没有class，请添加一个css module里的class。否则作用域将会不生效。`)
         } else {
           rule.selector = selectorParser(selectors => {
             selectors.walkPseudos((pseudo: Pseudo) => {
@@ -36,7 +37,7 @@ const findTopLevelVDeep: Plugin = {
                 while (next && next.type !== "class") {
                   if (next.type === "combinator") {
                     if (combinator) {
-                      return console.error(
+                      throw new CompilerException(
                         `意料之外的多个combinator。文件${removeCwd(root.source?.input.file ?? "")}中止转换，于选择器${
                           rule.selector
                         }`,
@@ -59,6 +60,8 @@ const findTopLevelVDeep: Plugin = {
             })
           }).processSync(rule.selector)
         }
+      } else {
+        console.warn(`文件${uri}中存在@规则：${rule.toString()}，请手动处理。`)
       }
     })
   },
