@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "rootDir": ".",
-    "target": "es5",
+    "target": "ESNext",
     "module": "commonjs",
     "outDir": "./out-tsc",
     "strict": true,
