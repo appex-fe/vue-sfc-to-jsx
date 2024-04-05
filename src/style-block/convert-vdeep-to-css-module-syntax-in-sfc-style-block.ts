@@ -4,10 +4,7 @@ import selectorParser, { Pseudo, Combinator } from "postcss-selector-parser"
 import { readFileSync } from "fs"
 import { parseComponent } from "vue-template-compiler"
 import { CompilerException } from "@/utils/exception"
-
-function removeCwd(uri: string): string {
-  return uri.replace(process.cwd() + "/", "")
-}
+import { removeCwd } from "@/utils/common"
 
 const isFileScopeTopLevel = (node: postcss.Node): boolean => {
   if (node.type === "rule" && "selector" in node && (node.selector as string).trim().startsWith("&")) {

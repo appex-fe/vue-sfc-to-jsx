@@ -16,6 +16,7 @@ import {
 } from "typescript"
 import { pathToFileURL } from "url"
 import { getSfcToJsxConfigSync } from "@/utils/get-sfc-to-jsx-config"
+import { simpleRandomStr, hyphenate } from "@/utils/common"
 
 /**
  * @description: 此文件中的“selector”表示CSS选择器，例如“.foo”、“.wrapper”、“#bar”、“div” 等。className 表示类名，例如“foo”、“wrapper”等。className是selector的子集。
@@ -35,21 +36,6 @@ export enum ClassScopeEnum {
  */
 export interface SelectorInfo {
   classNames: { [className: string]: ClassScopeEnum }
-}
-
-/**
- * @description: 将驼峰字符串转换为连字符字符串
- */
-const hyphenate = (str: string, hyp = "-"): string => {
-  const hyphenateRE = /\B([A-Z])/g
-  return str.replace(hyphenateRE, hyp + "$1").toLowerCase()
-}
-
-/**
- * @description: 生成一个简单的随机字符串
- */
-function simpleRandomStr(): string {
-  return Math.random().toString(36).slice(2)
 }
 
 /**
