@@ -1,5 +1,6 @@
 import { type SFCDescriptor, parseComponent } from "vue-template-compiler"
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
+import { readFile, writeFile, access, mkdir } from "node:fs/promises";
+import { constants } from "node:fs";
 import path from "path"
 import postcss, { type Rule } from "postcss"
 import { compile } from "sass"
@@ -17,10 +18,7 @@ import {
 import { pathToFileURL } from "url"
 import { getSfcToJsxConfigSync } from "@/utils/get-sfc-to-jsx-config"
 import { simpleRandomStr, hyphenate } from "@/utils/common"
-
-/**
- * @description: 此文件中的“selector”表示CSS选择器，例如“.foo”、“.wrapper”、“#bar”、“div” 等。className 表示类名，例如“foo”、“wrapper”等。className是selector的子集。
- */
+import { FileNotFoundException } from "@/utils/exception";
 
 /**
  * @description: 作用域枚举，用于标记类名的作用域，LOCAL表示局部作用域，GLOBAL表示全局作用域，UNKNOWN表示冲突的作用域。
@@ -32,32 +30,43 @@ export enum ClassScopeEnum {
 }
 
 /**
- * @description: scss文件中的选择器信息，包含所有的类名及作用域
+ * @description: scss文件中的选择器信息，包含所有的类名及作用域。关于selector和classNames之间的区别参见本模块下的readme.md。
  */
 export interface SelectorInfo {
   classNames: { [className: string]: ClassScopeEnum }
 }
 
+export async function checkFileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+
+
 /**
  * @description: 如果同目录下有重名文件则在文件名后加随机字符串，返回唯一的文件路径。
  */
-export function getUniqueAbsoluteFilePath(
+export async function getUniqueAbsoluteFilePath(
   targetFileDirectory: string,
   filename: string,
   ext: string,
   opt: { createDirectory?: boolean } = {},
-): string {
+): Promise<string> {
   // 如果目标文件目录不存在
-  if (!existsSync(targetFileDirectory)) {
+  if (!await checkFileExists(targetFileDirectory)) {
     // 如果createDirectory为true则创建目录
     if (opt.createDirectory) {
-      mkdirSync(targetFileDirectory, { recursive: true })
+      await mkdir(targetFileDirectory, { recursive: true })
     } else {
-      throw new Error(`目录 "${targetFileDirectory}" 不存在`)
+      throw new FileNotFoundException(`目录 "${targetFileDirectory}" 不存在`)
     }
   }
   let targetAbsoluteFilePath: string = path.resolve(targetFileDirectory, `${filename}.${ext}`)
-  while (existsSync(targetAbsoluteFilePath)) {
+  while (await checkFileExists(targetAbsoluteFilePath)) {
     console.log(targetAbsoluteFilePath, null, `同目录下有重名${ext}文件: ${targetAbsoluteFilePath}`)
     targetAbsoluteFilePath = path.resolve(targetFileDirectory, `${filename}${simpleRandomStr()}.${ext}`)
   }
@@ -67,9 +76,9 @@ export function getUniqueAbsoluteFilePath(
 /**
  * @description: 如果同目录下有重名文件则在文件名后加随机字符串，返回SCSS文件路径。
  */
-function determineAbsoluteScssFilePathByFilename(VueFilePath: string): string {
-  if (!existsSync(VueFilePath)) {
-    throw new Error(`Vue文件 "${VueFilePath}" 不存在`)
+async function determineAbsoluteScssFilePathByFilename(VueFilePath: string): Promise<string> {
+  if (!await checkFileExists(VueFilePath)) {
+    throw new FileNotFoundException(`Vue文件 "${VueFilePath}" 不存在`)
   }
   const filenameWithoutExtension: string = path.basename(VueFilePath, path.extname(VueFilePath))
   const hyphenateFilename: string = hyphenate(filenameWithoutExtension)
@@ -79,17 +88,17 @@ function determineAbsoluteScssFilePathByFilename(VueFilePath: string): string {
 /**
  * @description: 从Vue文件中提取style内容并创建SCSS文件
  */
-export function createScssFileByVueSFC(VueFilePath: string): { scssFilePath: string; VueFilePath: string } {
-  if (!existsSync(VueFilePath)) {
-    throw new Error(`Vue文件 "${VueFilePath}" 不存在`)
+export async function createScssFileByVueSFC(VueFilePath: string): Promise<{ scssFilePath: string; VueFilePath: string; }> {
+  if (!await checkFileExists(VueFilePath)) {
+    throw new FileNotFoundException(`Vue文件 "${VueFilePath}" 不存在`)
   }
-  const source: string = readFileSync(VueFilePath, "utf8")
+  const source: string = await readFile(VueFilePath, "utf8")
   const parsed: SFCDescriptor = parseComponent(source)
   let absoluteScssFilePath: string = ""
   const scssContent: string = parsed.styles.map(style => style.content).join("\n")
   if (scssContent.trim()) {
-    absoluteScssFilePath = determineAbsoluteScssFilePathByFilename(VueFilePath)
-    writeFileSync(absoluteScssFilePath, scssContent, "utf8")
+    absoluteScssFilePath = await determineAbsoluteScssFilePathByFilename(VueFilePath)
+    await writeFile(absoluteScssFilePath, scssContent, "utf8")
   }
   return { scssFilePath: absoluteScssFilePath, VueFilePath }
 }
@@ -174,14 +183,14 @@ function createImportStatement(
 /**
  * @description: 将SCSS文件导入到Vue文件中
  */
-export function insertImportToVueSFC(VueFilePath: string, scssFilePath: string): { importName: string; VueFilePath: string } {
-  if (!existsSync(VueFilePath)) {
-    throw new Error(`Vue文件 "${VueFilePath}" 不存在`)
+export async function insertImportToVueSFC(VueFilePath: string, scssFilePath: string): Promise<{ importName: string; VueFilePath: string; }> {
+  if (!await checkFileExists(VueFilePath)) {
+    throw new FileNotFoundException(`Vue文件 "${VueFilePath}" 不存在`)
   }
-  if (!existsSync(scssFilePath)) {
-    throw new Error(`SCSS文件 "${scssFilePath}" 不存在`)
+  if (!await checkFileExists(scssFilePath)) {
+    throw new FileNotFoundException(`SCSS文件 "${scssFilePath}" 不存在`)
   }
-  const vueFileContent: string = readFileSync(VueFilePath, "utf8")
+  const vueFileContent: string = await readFile(VueFilePath, "utf8")
   const parsed: SFCDescriptor = parseComponent(vueFileContent)
   let updatedVueFileContent: string = ""
   let defaultImportName: string = "styles"
@@ -197,7 +206,7 @@ export function insertImportToVueSFC(VueFilePath: string, scssFilePath: string):
     // 在vue文件的最后拼接一个script标签
     updatedVueFileContent = `${vueFileContent}\n<script>\nimport ${defaultImportName} from "${relativeScssFilePath}"\n</script>`
   }
-  writeFileSync(VueFilePath, updatedVueFileContent, "utf8")
+  await writeFile(VueFilePath, updatedVueFileContent, "utf8")
   return { importName: defaultImportName, VueFilePath }
 }
 
@@ -254,11 +263,11 @@ function updateScopedClassNames(
 /**
  * @description: 从SCSS文件中获取所有类名信息
  */
-export const getAllClassNamesFromScssFile = (scssFilePath: string): SelectorInfo => {
-  if (!existsSync(scssFilePath)) {
-    throw new Error(`SCSS文件 "${scssFilePath}" 不存在`)
+export async function getAllClassNamesFromScssFile(scssFilePath: string): Promise<SelectorInfo> {
+  if (!await checkFileExists(scssFilePath)) {
+    throw new FileNotFoundException(`SCSS文件 "${scssFilePath}" 不存在`);
   }
-  const sfcToJsxConfig = getSfcToJsxConfigSync()
+  const sfcToJsxConfig = getSfcToJsxConfigSync();
   // 读取文件内容并编译为CSS
   const cssContent: string = compile(scssFilePath, {
     // 自定义导入器（Importers）用于控制如何解析来自@use和@import规则的加载请求。Sass会按照以下顺序尝试解析加载：
@@ -275,18 +284,18 @@ export const getAllClassNamesFromScssFile = (scssFilePath: string): SelectorInfo
         // 将url字符串作为参数传入用户自定义的函数中，由用户去决定如何解析，然后将函数返回的字符串作为绝对路径转换为URL对象。
         // 如果没有按照预期解析出URL对象，则由用户承担后果。
         findFileUrl(url: string) {
-          return new URL(pathToFileURL(sfcToJsxConfig.scssAliasResolver(url)).href)
+          return new URL(pathToFileURL(sfcToJsxConfig.scssAliasResolver(url)).href);
         },
       },
     ],
-  }).css
-  const selectorInfo: SelectorInfo = { classNames: {} }
+  }).css;
+  const selectorInfo: SelectorInfo = { classNames: {} };
   // 处理CSS内容，提取类名
   postcss.parse(cssContent).walkRules((rule: Rule) => {
     // 在给定的字符串中，全局匹配所有的 :global(...) 或 :local(...) 形式的模式，以及其他不包含空格和逗号的连续字符
     // 例如：:global(.foo) .bar :local(.baz .baz1) .baz2 :global .baz3 :local .baz4 span .type, .default
     // 匹配结果：[":global(.foo)", ".bar", ":local(.baz .baz1)", ".baz2", ":global", ".baz3", ":local", ".baz4", "span", ".type", ".default]
-    const selectors: string[] = rule.selector.match(/:(global|local)\([^)]+\)|[^ ,]+/g) || []
+    const selectors: string[] = rule.selector.match(/:(global|local)\([^)]+\)|[^ ,]+/g) || [];
     /**
      *
      * 默认将作用域标记(scope)设置为 LOCAL。
@@ -297,20 +306,20 @@ export const getAllClassNamesFromScssFile = (scssFilePath: string): SelectorInfo
      *    - 如果是 :local(...) 形式的选择器，则只将括号内的选择器标记为 LOCAL，但不改变当前作用域标记(scope)。
      *    - 如果是普通选择器，则根据当前的作用域标记(scope)对选择器中的类名进行标记。
      */
-    let scope: ClassScopeEnum = ClassScopeEnum.LOCAL
+    let scope: ClassScopeEnum = ClassScopeEnum.LOCAL;
     selectors.forEach(selector => {
       if (selector === ":global") {
-        scope = ClassScopeEnum.GLOBAL
+        scope = ClassScopeEnum.GLOBAL;
       } else if (selector === ":local") {
-        scope = ClassScopeEnum.LOCAL
+        scope = ClassScopeEnum.LOCAL;
       } else if (selector.startsWith(":global(")) {
-        updateScopedClassNames(selector, ClassScopeEnum.GLOBAL, selectorInfo.classNames)
+        updateScopedClassNames(selector, ClassScopeEnum.GLOBAL, selectorInfo.classNames);
       } else if (selector.startsWith(":local(")) {
-        updateScopedClassNames(selector, ClassScopeEnum.LOCAL, selectorInfo.classNames)
+        updateScopedClassNames(selector, ClassScopeEnum.LOCAL, selectorInfo.classNames);
       } else {
-        updateAndMarkClassScope(selectorInfo.classNames, selector, scope)
+        updateAndMarkClassScope(selectorInfo.classNames, selector, scope);
       }
-    })
-  })
-  return selectorInfo
+    });
+  });
+  return selectorInfo;
 }

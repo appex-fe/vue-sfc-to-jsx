@@ -5,6 +5,13 @@ class BaseException extends Error {
   }
 }
 
+export class FileNotFoundException extends BaseException {
+  constructor(message: string, cause?: unknown) {
+    super(message, cause);
+    this.name = "FileNotFoundException";
+  }
+}
+
 export class CompilerException extends BaseException {
   constructor(message: string, cause?: unknown) {
     super(message, cause);
