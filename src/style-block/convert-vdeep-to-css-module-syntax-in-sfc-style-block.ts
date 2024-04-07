@@ -1,10 +1,8 @@
 import postcss, { AtRule, Plugin, Root, Rule } from "postcss"
 import scssSyntax from "postcss-scss"
 import selectorParser, { Pseudo, Combinator } from "postcss-selector-parser"
-import { readFile } from "node:fs/promises"
-import { parseComponent } from "vue-template-compiler"
 import { CompilerException } from "@/utils/exception"
-import { removeCwd } from "@/utils/common"
+import { parseVueSfcByPath, removeCwd } from "@/utils/common"
 
 const isFileScopeTopLevel = (node: postcss.Node): boolean => {
   if (node.type === "rule" && "selector" in node && (node.selector as string).trim().startsWith("&")) {
@@ -44,6 +42,7 @@ const findTopLevelVDeep: Plugin = {
                   console.debug("next???", next.type, `👉${next.toString()}👈`)
                   next = next.next()
                 }
+                // TODO: 只应该生成:global {}，而不是:global(xx) {}
                 if (next) {
                   next.replaceWith(selectorParser.pseudo({ value: `:global(${next.toString()})` }))
                   pseudo.remove()
@@ -80,15 +79,13 @@ type VDeepResult = { uri: string; result: string, blockStart: number | undefined
 export async function convertVDeep(fileUri: string): Promise<VDeepResult[]> {
   const arr: VDeepResult[] = []
 
-  const fileContent = await readFile(fileUri, "utf-8")
-  parseComponent(fileContent)
-    .styles.filter(style => {
+  const tasks = (await parseVueSfcByPath(fileUri)).styles.filter(style => {
       if (!style.scoped) {
         throw new Error("Only scoped styles are supported")
       }
       return style.lang === "scss"
     })
-    .forEach(async block => {
+    .map(async block => {
       const { content, start, end } = block
       const result = await postcss([findTopLevelVDeep]).process(content, {
         syntax: scssSyntax,
@@ -97,5 +94,6 @@ export async function convertVDeep(fileUri: string): Promise<VDeepResult[]> {
       arr.push({ uri: fileUri, result: result.css, blockEnd: end, blockStart: start })
     })
 
+  await Promise.all(tasks)
   return arr
 }

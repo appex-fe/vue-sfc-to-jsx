@@ -1,10 +1,12 @@
+import { parseComponentConfig } from "@/shared/parse-component-config"
 import { FileNotFoundException } from "@/utils/exception"
 import { constants } from "node:fs"
 import {
   writeFile,
-  access, mkdir
+  access, mkdir, readFile
 } from "node:fs/promises"
 import path from "path"
+import { type SFCDescriptor, parseComponent } from "vue-template-compiler"
 
 /**
  * @description: 将驼峰字符串转换为连字符字符串
@@ -43,5 +45,18 @@ export async function saveFile(filePath: string, content: string, opt: { createD
     }
   }
   return await writeFile(filePath, content, "utf8");
+}
+
+export function parseVueSfcByFileContent(source: string): SFCDescriptor {
+  const parsed: SFCDescriptor = parseComponent(source, parseComponentConfig)
+  return parsed
+}
+
+export async function parseVueSfcByPath(VueFilePath: string): Promise<SFCDescriptor> {
+  if (!await checkFileExists(VueFilePath)) {
+    throw new FileNotFoundException(`Vue文件 "${VueFilePath}" 不存在`)
+  }
+  const source: string = await readFile(VueFilePath, "utf8")
+  return parseVueSfcByFileContent(source)
 }
 
