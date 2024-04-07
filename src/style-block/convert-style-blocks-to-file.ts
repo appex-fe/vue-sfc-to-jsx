@@ -1,6 +1,5 @@
 import { type SFCDescriptor, parseComponent } from "vue-template-compiler"
-import { readFile, writeFile, access, mkdir } from "node:fs/promises";
-import { constants } from "node:fs";
+import { readFile, mkdir } from "node:fs/promises";
 import path from "path"
 import postcss, { type Rule } from "postcss"
 import { compile } from "sass"
@@ -16,9 +15,19 @@ import {
   SourceFile,
 } from "typescript"
 import { pathToFileURL } from "url"
-import { getSfcToJsxConfigSync } from "@/utils/get-sfc-to-jsx-config"
+import { getSfcToJsxConfig } from "@/utils/get-sfc-to-jsx-config"
 import { simpleRandomStr, hyphenate } from "@/utils/common"
 import { FileNotFoundException } from "@/utils/exception";
+import { checkFileExists, saveFile } from "@/utils/common";
+import { isNumber, isObjectLike } from "@/utils/is";
+
+type CreateScssFileByVueSFCResult = { scssFilePath: string; VueFilePath: string }
+
+type BlockPosition = { blockStart: number; blockEnd: number }
+
+interface ConvertedScssBlock extends BlockPosition {
+  content: string
+}
 
 /**
  * @description: 作用域枚举，用于标记类名的作用域，LOCAL表示局部作用域，GLOBAL表示全局作用域，UNKNOWN表示冲突的作用域。
@@ -35,17 +44,6 @@ export enum ClassScopeEnum {
 export interface SelectorInfo {
   classNames: { [className: string]: ClassScopeEnum }
 }
-
-export async function checkFileExists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath, constants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-
 
 /**
  * @description: 如果同目录下有重名文件则在文件名后加随机字符串，返回唯一的文件路径。
@@ -85,10 +83,23 @@ async function determineAbsoluteScssFilePathByFilename(VueFilePath: string): Pro
   return getUniqueAbsoluteFilePath(path.dirname(VueFilePath), hyphenateFilename, "module.scss")
 }
 
-/**
- * @description: 从Vue文件中提取style内容并创建SCSS文件
- */
-export async function createScssFileByVueSFC(VueFilePath: string): Promise<{ scssFilePath: string; VueFilePath: string; }> {
+export async function createScssFileByVueSFC(VueFilePath: string): Promise<CreateScssFileByVueSFCResult>
+export async function createScssFileByVueSFC(VueFilePath: string, convertedScssBlock: ConvertedScssBlock): Promise<CreateScssFileByVueSFCResult>
+export async function createScssFileByVueSFC(VueFilePath: string, convertedScssBlock?: ConvertedScssBlock): Promise<CreateScssFileByVueSFCResult> {
+  // 针对第二条重载
+  if (convertedScssBlock) {
+    const { blockStart, blockEnd, content } = convertedScssBlock
+    const absoluteScssFilePath = await determineAbsoluteScssFilePathByFilename(VueFilePath)
+    await saveFile(absoluteScssFilePath, content, { createDirectory: true })
+    if (isNumber(blockStart) && isNumber(blockEnd)) {
+      await removeBlocksFromVueSFC(VueFilePath, [{ blockStart, blockEnd }], content)
+    } else {
+      await removeBlocksFromVueSFC(VueFilePath, "style")
+    }
+    return { scssFilePath: absoluteScssFilePath, VueFilePath }
+  }
+
+  // 针对第一条重载
   if (!await checkFileExists(VueFilePath)) {
     throw new FileNotFoundException(`Vue文件 "${VueFilePath}" 不存在`)
   }
@@ -98,7 +109,13 @@ export async function createScssFileByVueSFC(VueFilePath: string): Promise<{ scs
   const scssContent: string = parsed.styles.map(style => style.content).join("\n")
   if (scssContent.trim()) {
     absoluteScssFilePath = await determineAbsoluteScssFilePathByFilename(VueFilePath)
-    await writeFile(absoluteScssFilePath, scssContent, "utf8")
+    await saveFile(absoluteScssFilePath, scssContent, { createDirectory: true })
+    const positions = parsed.styles.map(style => ({ blockStart: style.start, blockEnd: style.end }))
+    if (positions.every(position => isNumber(position.blockStart) && isNumber(position.blockEnd))) {
+      await removeBlocksFromVueSFC(VueFilePath, positions as BlockPosition[], scssContent)
+    } else {
+      await removeBlocksFromVueSFC(VueFilePath, "style")
+    }
   }
   return { scssFilePath: absoluteScssFilePath, VueFilePath }
 }
@@ -206,7 +223,7 @@ export async function insertImportToVueSFC(VueFilePath: string, scssFilePath: st
     // 在vue文件的最后拼接一个script标签
     updatedVueFileContent = `${vueFileContent}\n<script>\nimport ${defaultImportName} from "${relativeScssFilePath}"\n</script>`
   }
-  await writeFile(VueFilePath, updatedVueFileContent, "utf8")
+  await saveFile(VueFilePath, updatedVueFileContent)
   return { importName: defaultImportName, VueFilePath }
 }
 
@@ -267,7 +284,7 @@ export async function getAllClassNamesFromScssFile(scssFilePath: string): Promis
   if (!await checkFileExists(scssFilePath)) {
     throw new FileNotFoundException(`SCSS文件 "${scssFilePath}" 不存在`);
   }
-  const sfcToJsxConfig = getSfcToJsxConfigSync();
+  const sfcToJsxConfig = await getSfcToJsxConfig();
   // 读取文件内容并编译为CSS
   const cssContent: string = compile(scssFilePath, {
     // 自定义导入器（Importers）用于控制如何解析来自@use和@import规则的加载请求。Sass会按照以下顺序尝试解析加载：
@@ -322,4 +339,72 @@ export async function getAllClassNamesFromScssFile(scssFilePath: string): Promis
     });
   });
   return selectorInfo;
+}
+
+export async function removeBlocksFromVueSFC(vueFilePath: string, blockType: "template" | "script" | "style" | "customBlocks"): Promise<void>
+export async function removeBlocksFromVueSFC(vueFilePath: string, positions: BlockPosition[]): Promise<void>
+export async function removeBlocksFromVueSFC(vueFilePath: string, positions: BlockPosition[], originContent: string): Promise<void>
+export async function removeBlocksFromVueSFC(
+  vueFilePath: string,
+  blockTypeOrPositions: "template" | "script" | "style" | "customBlocks" | BlockPosition[],
+  originContent?: string,
+): Promise<void> {
+  const oldContent = originContent ?? await readFile(vueFilePath, "utf-8")
+  // core
+  if (isObjectLike(blockTypeOrPositions)) {
+    // 按start从大到小排序，这样文件从后往前删相对安全
+    const positions = blockTypeOrPositions.sort((a, b) => b.blockStart - a.blockStart)
+    const newContent = positions.reduce((content, { blockStart, blockEnd }) => {
+      return content.slice(0, blockStart) + content.slice(blockEnd)
+    }, oldContent)
+    await saveFile(vueFilePath, newContent)
+
+    // 已经排好序，取最后一个即可
+    const minimumStart = positions[positions.length - 1].blockStart
+    return console.log(vueFilePath, minimumStart, `已从Vue文件中删除指定的代码块`)
+  }
+
+  // 处理重载
+  const parsed: SFCDescriptor = parseComponent(oldContent)
+  if (blockTypeOrPositions === "template") {
+    if (parsed.template) {
+      const { start, end } = parsed.template
+      if (isNumber(start) && isNumber(end)) {
+        removeBlocksFromVueSFC(vueFilePath, [{ blockStart: start, blockEnd: end }], oldContent)
+      } else {
+        console.error("无法获取template的开始和结束位置")
+      }
+      return
+    }
+  } else if (blockTypeOrPositions === "script") {
+    if (parsed.script) {
+      const { start, end } = parsed.script
+      if (isNumber(start) && isNumber(end)) {
+        removeBlocksFromVueSFC(vueFilePath, [{ blockStart: start, blockEnd: end }], oldContent)
+      } else {
+        console.error("无法获取script的开始和结束位置")
+      }
+      return
+    }
+  } else if (blockTypeOrPositions === "style") {
+    if (parsed.styles.length) {
+      const positions = parsed.styles.map(style => ({ blockStart: style.start, blockEnd: style.end }))
+      if (positions.every(position => isNumber(position.blockStart) && isNumber(position.blockEnd))) {
+        removeBlocksFromVueSFC(vueFilePath, positions as BlockPosition[], oldContent)
+      } else {
+        console.error("无法获取style的开始和结束位置")
+      }
+      return
+    }
+  } else if (blockTypeOrPositions === "customBlocks") {
+    if (parsed.customBlocks.length) {
+      const positions = parsed.customBlocks.map(block => ({ blockStart: block.start, blockEnd: block.end }))
+      if (positions.every(position => isNumber(position.blockStart) && isNumber(position.blockEnd))) {
+        removeBlocksFromVueSFC(vueFilePath, positions as BlockPosition[], oldContent)
+      } else {
+        console.error("无法获取customBlocks的开始和结束位置")
+      }
+      return
+    }
+  }
 }

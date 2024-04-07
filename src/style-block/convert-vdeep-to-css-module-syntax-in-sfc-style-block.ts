@@ -1,7 +1,7 @@
 import postcss, { AtRule, Plugin, Root, Rule } from "postcss"
 import scssSyntax from "postcss-scss"
 import selectorParser, { Pseudo, Combinator } from "postcss-selector-parser"
-import { readFileSync } from "fs"
+import { readFile } from "node:fs/promises"
 import { parseComponent } from "vue-template-compiler"
 import { CompilerException } from "@/utils/exception"
 import { removeCwd } from "@/utils/common"
@@ -35,8 +35,7 @@ const findTopLevelVDeep: Plugin = {
                   if (next.type === "combinator") {
                     if (combinator) {
                       throw new CompilerException(
-                        `意料之外的多个combinator。文件${removeCwd(root.source?.input.file ?? "")}中止转换，于选择器${
-                          rule.selector
+                        `意料之外的多个combinator。文件${removeCwd(root.source?.input.file ?? "")}中止转换，于选择器${rule.selector
                         }`,
                       )
                     }
@@ -64,10 +63,12 @@ const findTopLevelVDeep: Plugin = {
   },
 }
 
+type VDeepResult = { uri: string; result: string, blockStart: number | undefined, blockEnd: number | undefined }
+
 /**
  * Converts the style blocks of the specified files from SFC format to CSS module format.
  *
- * @param fileUris - The URIs of the files to convert.
+ * @param fileUri - The URIs of the files to convert.
  * @example
  * const files: string[] = [
  *   "src/components/baseTrafficReport.vue",
@@ -76,28 +77,25 @@ const findTopLevelVDeep: Plugin = {
  * ];
  * convert(files);
  */
-export async function convert(fileUris: string[]): Promise<{ uri: string; result: string }[]> {
-  const arr: { uri: string; result: string }[] = []
+export async function convertVDeep(fileUri: string): Promise<VDeepResult[]> {
+  const arr: VDeepResult[] = []
 
-  for (const uri of fileUris) {
-    const fileContent = readFileSync(uri, "utf-8")
-    const scssContents: string[] = parseComponent(fileContent)
-      .styles.filter(style => {
-        if (!style.scoped) {
-          throw new Error("Only scoped styles are supported")
-        }
-        return style.lang === "scss"
-      })
-      .map(style => style.content)
-
-    for (const scssContent of scssContents) {
-      const result = await postcss([findTopLevelVDeep]).process(scssContent, {
+  const fileContent = await readFile(fileUri, "utf-8")
+  parseComponent(fileContent)
+    .styles.filter(style => {
+      if (!style.scoped) {
+        throw new Error("Only scoped styles are supported")
+      }
+      return style.lang === "scss"
+    })
+    .forEach(async block => {
+      const { content, start, end } = block
+      const result = await postcss([findTopLevelVDeep]).process(content, {
         syntax: scssSyntax,
-        from: uri,
+        from: fileUri,
       })
-      arr.push({ uri, result: result.css })
-    }
-  }
+      arr.push({ uri: fileUri, result: result.css, blockEnd: end, blockStart: start })
+    })
 
   return arr
 }

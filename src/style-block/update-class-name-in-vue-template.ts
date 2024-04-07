@@ -5,6 +5,7 @@ import { parseExpression } from "@babel/parser"
 import generate from "@babel/generator"
 import logger from "node:console"
 import { getAllClassNamesFromScssFile } from "./convert-style-blocks-to-file"
+import { saveFile } from "@/utils/common";
 
 enum ClassScopeEnum {
   LOCAL,
@@ -398,7 +399,7 @@ export async function updateClassNameInVueTemplate(
       vueFileContent = vueFileContent.slice(0, start) + value + vueFileContent.slice(end)
     })
     // 将更新后的内容写回.vue文件
-    await writeFile(vueFilePath, vueFileContent, "utf-8")
+    await saveFile(vueFilePath, vueFileContent)
     logger.info(vueFilePath, null, `Class replacement completed with ${updatedCount} updates.`)
     return { status: true, updatedCount }
   } catch (error) {

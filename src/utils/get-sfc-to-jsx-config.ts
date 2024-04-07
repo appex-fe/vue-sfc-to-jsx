@@ -1,5 +1,6 @@
 import { SfcToJsxConfig } from "@/shared/types"
 import { existsSync } from "fs"
+import { checkFileExists } from "./common"
 
 export const defaultSfcToJsxConfig: SfcToJsxConfig = {
   scssAliasResolver: (url: string) => {
@@ -9,7 +10,7 @@ export const defaultSfcToJsxConfig: SfcToJsxConfig = {
 
 export async function getSfcToJsxConfig(): Promise<SfcToJsxConfig> {
   const userDefinedConfigPath = process.env.USER_DEFINED_CONFIG_PATH
-  if (userDefinedConfigPath && existsSync(userDefinedConfigPath)) {
+  if (userDefinedConfigPath && await checkFileExists(userDefinedConfigPath)) {
     return (await import(userDefinedConfigPath)).default
   } else {
     return defaultSfcToJsxConfig
