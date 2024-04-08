@@ -157,16 +157,8 @@ function createImportStatement(
   const existingImportNames: string[] = getAllExistingImportNames(sourceFile)
   // 确定import语句的名称
   const importName: string = getUniqueImportName(vueFilePath, existingImportNames)
-  // 创建新的import语句
-  const importClause = factory.createImportClause(false, factory.createIdentifier(importName), undefined)
-  const newImport = factory.createImportDeclaration(undefined, importClause, factory.createStringLiteral(relativeScssFilePath))
-  // 将新的import语句添加到AST中
-  const updatedStatements = factory.createNodeArray([newImport, ...sourceFile.statements])
-  // 更新sourceFile节点
-  const updatedSourceFile = factory.updateSourceFile(sourceFile, updatedStatements)
-  // 使用TypeScript printer将更新后的AST转换为TypeScript代码
-  const printer = createPrinter()
-  const newVueScriptContent = printer.printFile(updatedSourceFile)
+  // 生成import语句，拼接在script内容最前面
+  const newVueScriptContent = `\nimport ${importName} from "${relativeScssFilePath}"${vueScriptContent}`
   return { importName, newVueScriptContent }
 }
 
@@ -181,7 +173,7 @@ export async function insertImportToVueSFC(VueFilePath: string, scssFilePath: st
     throw new FileNotFoundException(`SCSS文件 "${scssFilePath}" 不存在`)
   }
   const vueFileContent: string = await readFile(VueFilePath, "utf8")
-  const parsed: SFCDescriptor = parseVueSfcByFileContent(VueFilePath)
+  const parsed: SFCDescriptor = parseVueSfcByFileContent(vueFileContent)
   let updatedVueFileContent: string = ""
   let defaultImportName: string = "styles"
   // 获取SCSS文件相对路径
