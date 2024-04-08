@@ -5,10 +5,7 @@ import { CompilerException } from "@/utils/exception"
 import { parseVueSfcByPath, removeCwd } from "@/utils/common"
 
 const isFileScopeTopLevel = (node: postcss.Node): boolean => {
-  if (node.type === "rule" && "selector" in node && (node.selector as string).trim().startsWith("&")) {
-    return node.parent ? isFileScopeTopLevel(node.parent) : true
-  }
-  return node.parent?.type === "root"
+  return !node.parent || node.parent.type === "root"
 }
 
 const findTopLevelVDeep: Plugin = {
@@ -26,31 +23,12 @@ const findTopLevelVDeep: Plugin = {
             selectors.walkPseudos((pseudo: Pseudo) => {
               // 找到::v-deep并转换
               if (pseudo.value === "::v-deep") {
-                // 找到下一个有效的选择器节点
-                let next = pseudo.next()
-                let combinator: Combinator | null = null
-                while (next && next.type !== "class") {
-                  if (next.type === "combinator") {
-                    if (combinator) {
-                      throw new CompilerException(
-                        `意料之外的多个combinator。文件${removeCwd(root.source?.input.file ?? "")}中止转换，于选择器${rule.selector
-                        }`,
-                      )
-                    }
-                    combinator = next
-                  }
-                  console.debug("next???", next.type, `👉${next.toString()}👈`)
-                  next = next.next()
+                // 如果有前置nesting，移除之
+                const prev = pseudo.prev()
+                if (prev?.type === "nesting") {
+                  prev.remove()
                 }
-                // TODO: 只应该生成:global {}，而不是:global(xx) {}
-                if (next) {
-                  next.replaceWith(selectorParser.pseudo({ value: `:global(${next.toString()})` }))
-                  pseudo.remove()
-                  // `::v-deep .className` -> `:global(.className)` 而不是 ` :global(.className)`, 去掉多余的空格
-                  combinator?.remove()
-                } else {
-                  pseudo.replaceWith(selectorParser.pseudo({ value: `:global` }))
-                }
+                pseudo.replaceWith(selectorParser.pseudo({ value: `:global` }))
               }
             })
           }).processSync(rule.selector)
