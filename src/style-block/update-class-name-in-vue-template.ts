@@ -4,14 +4,8 @@ import * as t from "@babel/types"
 import { parseExpression } from "@babel/parser"
 import generate from "@babel/generator"
 import logger from "node:console"
-import { getAllClassNamesFromScssFile } from "./convert-style-blocks-to-file"
+import { ClassScopeEnum, getAllClassNamesFromScssFile } from "./convert-style-blocks-to-file"
 import { saveFile } from "@/utils/common";
-
-enum ClassScopeEnum {
-  LOCAL,
-  GLOBAL,
-  UNKNOWN,
-}
 
 interface ClassReplacementItem {
   start: number
@@ -22,8 +16,17 @@ interface ClassReplacementItem {
 /**
  * @description: 获取需要被替换的class名称数组
  */
-function getReplacedClassNames(classScopes: { [className: string]: ClassScopeEnum }): string[] {
-  return Object.keys(classScopes).filter(className => classScopes[className] === ClassScopeEnum.LOCAL)
+function getReplacedClassNames(vueFilePath: string, classScopes: { [className: string]: ClassScopeEnum }): string[] {
+  return Object.keys(classScopes).filter(className => {
+    if (classScopes[className] === ClassScopeEnum.UNKNOWN) {
+      logger.warn(
+        vueFilePath,
+        null,
+        `There is a class name with class scope unknown. Please check manually. Class Name: ${className}.`,
+      )
+    }
+    return classScopes[className] === ClassScopeEnum.LOCAL
+  })
 }
 
 /**
@@ -390,7 +393,7 @@ export async function updateClassNameInVueTemplate(
       throw new Error("No <template> block found in the Vue file.")
     }
     // 获取.scss文件中所有class名称
-    const scssClasses = getReplacedClassNames((await getAllClassNamesFromScssFile(scssFilePath)).classNames)
+    const scssClasses = getReplacedClassNames(vueFilePath, (await getAllClassNamesFromScssFile(scssFilePath)).classNames)
     // 收集替换信息
     const { replacements, updatedCount } = collectClassReplacements(templateNode, scssClasses, importName, vueFilePath)
     // 根据收集到的替换信息，从后往前替换，避免偏移量的问题
