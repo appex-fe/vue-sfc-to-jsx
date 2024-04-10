@@ -61,7 +61,7 @@ export async function convertVDeep(fileUri: string): Promise<VDeepResult[]> {
       if (!style.scoped) {
         throw new Error("Only scoped styles are supported")
       }
-      return style.lang === "scss"
+      return true
     })
     .map(async block => {
       const { content, start, end } = block
