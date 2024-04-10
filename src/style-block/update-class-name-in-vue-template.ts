@@ -1,30 +1,11 @@
 import { parse, NodeTypes, ElementNode, RootNode } from "@vue/compiler-dom"
-import * as fs from "fs"
+import { readFile, writeFile } from "node:fs/promises";
 import * as t from "@babel/types"
 import { parseExpression } from "@babel/parser"
 import generate from "@babel/generator"
-import logger from "../utils/logger"
-
-enum ClassScopeEnum {
-  LOCAL,
-  GLOBAL,
-  UNKNOWN,
-}
-
-const getAllClassNamesFromScssFile = (scssFilePath: string): { classNames: { [className: string]: ClassScopeEnum } } => {
-  // 实现略
-  return {
-    classNames: {
-      tit: ClassScopeEnum.LOCAL,
-      "chart-area": ClassScopeEnum.LOCAL,
-      chart2: ClassScopeEnum.LOCAL,
-      active: ClassScopeEnum.LOCAL,
-      "text-danger": ClassScopeEnum.LOCAL,
-      errorClass: ClassScopeEnum.LOCAL,
-      activeClass: ClassScopeEnum.LOCAL,
-    },
-  }
-}
+import logger from "node:console"
+import { ClassScopeEnum, getAllClassNamesFromScssFile } from "./convert-style-blocks-to-file"
+import { saveFile } from "@/utils/common";
 
 interface ClassReplacementItem {
   start: number
@@ -35,8 +16,49 @@ interface ClassReplacementItem {
 /**
  * @description: 获取需要被替换的class名称数组
  */
-function getReplacedClassNames(classScopes: { [className: string]: ClassScopeEnum }): string[] {
-  return Object.keys(classScopes).filter(className => classScopes[className] === ClassScopeEnum.LOCAL)
+function getReplacedClassNames(vueFilePath: string, classScopes: { [className: string]: ClassScopeEnum }): string[] {
+  return Object.keys(classScopes).filter(className => {
+    if (classScopes[className] === ClassScopeEnum.UNKNOWN) {
+      logger.warn(
+        vueFilePath,
+        null,
+        `There is a class name with class scope unknown. Please check manually. Class Name: ${className}.`,
+      )
+    }
+    return classScopes[className] === ClassScopeEnum.LOCAL
+  })
+}
+
+/**
+ * @description: 查询生成的scss 文件中对应的location class names中是否存在该class name
+ */
+function searchClassNameInReplacedClassNames(
+  className: string,
+  scssClasses: string[],
+  hasReplacedClassNames: Set<string>,
+): boolean {
+  const result = scssClasses.includes(className)
+  // 如命中则该class name添加到hasReplacedClassNames中，用于后面比较哪些class name没有被替换
+  if (result) {
+    hasReplacedClassNames.add(className)
+  }
+  return result
+}
+
+/**
+ * @description: 检查生成的scss 文件中的location class names是否有存在没有被替换的class name，如存在则打印告警日志
+ */
+function checkUnreplacedClassNames(scssClasses: string[], hasReplacedClassNames: Set<string>, vueFilePath: string) {
+  const unreplacedClassNames = scssClasses.filter(className => !hasReplacedClassNames.has(className))
+  if(unreplacedClassNames.length > 0 ){
+    logger.warn(
+      vueFilePath,
+      null,
+      `There are class names here that has not been replaced. Please check manually. Class Names: ${unreplacedClassNames.join(
+        ", ",
+      )}.`,
+    )
+  }
 }
 
 /**
@@ -61,6 +83,7 @@ function processStringExpressionInClass(
   expression: string,
   scssClasses: string[],
   importName: string,
+  hasReplacedClassNames: Set<string>,
   // 父节点表达式的类型，当父节点表达式类型为模板字符串时将其转换成${styles.activeClass}的形式，当表达式为string时，只有一个class只需直接返回替换的字符即可，当有多个class时需要将其转换成数组
   parentExpressionType: "string" | "templateLiteral" = "string",
 ): { newStringExpression: string; updatedCountNum: number } {
@@ -69,7 +92,7 @@ function processStringExpressionInClass(
   const classList = expression.split(" ")
 
   const updatedClassList = classList.map((className: string) => {
-    if (scssClasses.includes(className)) {
+    if (searchClassNameInReplacedClassNames(className, scssClasses, hasReplacedClassNames)) {
       allUpdatedCountNum++
       // 根据是否模板字符串来返回不同格式
       return getReplaceClassText(importName, className, parentExpressionType)
@@ -103,6 +126,7 @@ function processConditionalExpression(
   importName: string,
   vueFilePath: string,
   startLine: number,
+  hasReplacedClassNames: Set<string>,
 ): { updatedCountNum: number } {
   let allUpdatedCountNum = 0
   const { consequent, alternate } = expression
@@ -112,6 +136,7 @@ function processConditionalExpression(
       consequent.value,
       scssClasses,
       importName,
+      hasReplacedClassNames,
       "templateLiteral",
     )
     if (updatedCountNum) {
@@ -119,10 +144,17 @@ function processConditionalExpression(
       allUpdatedCountNum += updatedCountNum
     }
   } else if (t.isTemplateLiteral(consequent)) {
-    const { updatedCountNum } = processTemplateLiteralExpression(consequent, scssClasses, importName, vueFilePath, startLine)
+    const { updatedCountNum } = processTemplateLiteralExpression(
+      consequent,
+      scssClasses,
+      importName,
+      vueFilePath,
+      startLine,
+      hasReplacedClassNames,
+    )
     allUpdatedCountNum += updatedCountNum
   } else {
-    logger.warning(
+    logger.warn(
       vueFilePath,
       startLine,
       `During Conditional expression parsing, there are expressions that are not supported. Please check manually.Expression type: ${consequent.type}.`,
@@ -134,6 +166,7 @@ function processConditionalExpression(
       alternate.value,
       scssClasses,
       importName,
+      hasReplacedClassNames,
       "templateLiteral",
     )
     if (updatedCountNum) {
@@ -141,10 +174,17 @@ function processConditionalExpression(
       allUpdatedCountNum += updatedCountNum
     }
   } else if (t.isTemplateLiteral(alternate)) {
-    const { updatedCountNum } = processTemplateLiteralExpression(alternate, scssClasses, importName, vueFilePath, startLine)
+    const { updatedCountNum } = processTemplateLiteralExpression(
+      alternate,
+      scssClasses,
+      importName,
+      vueFilePath,
+      startLine,
+      hasReplacedClassNames,
+    )
     allUpdatedCountNum += updatedCountNum
   } else {
-    logger.warning(
+    logger.warn(
       vueFilePath,
       startLine,
       `During Conditional expression parsing, there are expressions that are not supported. Please check manually.Expression type: ${consequent.type}.`,
@@ -162,6 +202,7 @@ function processTemplateLiteralExpression(
   importName: string,
   vueFilePath: string,
   startLine: number,
+  hasReplacedClassNames: Set<string>,
 ): { updatedCountNum: number } {
   let allUpdatedCountNum = 0
   // 处理模板字符串中的静态表达式部分
@@ -174,6 +215,7 @@ function processTemplateLiteralExpression(
         quasi.value.raw,
         scssClasses,
         importName,
+        hasReplacedClassNames,
         "templateLiteral",
       )
       if (updatedCountNum > 0) {
@@ -190,6 +232,7 @@ function processTemplateLiteralExpression(
         expr.value,
         scssClasses,
         importName,
+        hasReplacedClassNames,
         "templateLiteral",
       )
       if (updatedCountNum > 0) {
@@ -201,10 +244,17 @@ function processTemplateLiteralExpression(
       }
     } else if (t.isConditionalExpression(expr)) {
       // 处理条件表达式的真值和假值部分
-      const { updatedCountNum } = processConditionalExpression(expr, scssClasses, importName, vueFilePath, startLine)
+      const { updatedCountNum } = processConditionalExpression(
+        expr,
+        scssClasses,
+        importName,
+        vueFilePath,
+        startLine,
+        hasReplacedClassNames,
+      )
       allUpdatedCountNum += updatedCountNum
     } else {
-      logger.warning(
+      logger.warn(
         vueFilePath,
         startLine,
         `During template literal expression parsing, there are expressions that are not supported. Please check manually.Expression type: ${expr.type}.`,
@@ -223,6 +273,7 @@ function processDynamicClassExpression(
   importName: string,
   vueFilePath: string,
   startLine: number,
+  hasReplacedClassNames: Set<string>,
 ): { newExpression: string; updatedCountNum: number } {
   let newExpression: string = ""
   let allUpdatedCountNum: number = 0
@@ -236,7 +287,7 @@ function processDynamicClassExpression(
     ast.properties.forEach(prop => {
       if (t.isObjectProperty(prop) && (t.isIdentifier(prop.key) || t.isStringLiteral(prop.key))) {
         const key = t.isIdentifier(prop.key) ? prop.key.name : prop.key.value
-        if (scssClasses.includes(key)) {
+        if (searchClassNameInReplacedClassNames(key, scssClasses, hasReplacedClassNames)) {
           // 创建一个新的计算属性的键
           const newKey = t.identifier(getReplaceClassText(importName, key))
           // 将原来的键替换为新的计算属性的键
@@ -246,7 +297,7 @@ function processDynamicClassExpression(
           allUpdatedCountNum++
         }
       } else {
-        logger.warning(
+        logger.warn(
           vueFilePath,
           startLine,
           `During object expression parsing, there are expressions that are not supported. Please check manually.Expression type: ${prop.type}.`,
@@ -260,7 +311,7 @@ function processDynamicClassExpression(
     const { elements } = ast
     elements.forEach((element, index: number) => {
       if (t.isStringLiteral(element)) {
-        if (scssClasses.includes(element.value)) {
+        if (searchClassNameInReplacedClassNames(element.value, scssClasses, hasReplacedClassNames)) {
           // 替换数组中的字符串字面量为 styles 对象属性
           elements[index] = t.identifier(getReplaceClassText(importName, element.value))
           allUpdatedCountNum++
@@ -268,15 +319,29 @@ function processDynamicClassExpression(
       }
       // 数组元素为条件表达式时
       else if (t.isConditionalExpression(element)) {
-        const { updatedCountNum } = processConditionalExpression(element, scssClasses, importName, vueFilePath, startLine)
+        const { updatedCountNum } = processConditionalExpression(
+          element,
+          scssClasses,
+          importName,
+          vueFilePath,
+          startLine,
+          hasReplacedClassNames,
+        )
         allUpdatedCountNum += updatedCountNum
       }
       // 数组元素为模板字符串时
       else if (t.isTemplateLiteral(element)) {
-        const { updatedCountNum } = processTemplateLiteralExpression(element, scssClasses, importName, vueFilePath, startLine)
+        const { updatedCountNum } = processTemplateLiteralExpression(
+          element,
+          scssClasses,
+          importName,
+          vueFilePath,
+          startLine,
+          hasReplacedClassNames,
+        )
         allUpdatedCountNum += updatedCountNum
       } else {
-        logger.warning(
+        logger.warn(
           vueFilePath,
           startLine,
           `During array expression parsing, there are expressions that are not supported. Please check manually.Expression type: ${element?.type}.`,
@@ -287,23 +352,42 @@ function processDynamicClassExpression(
   // 条件表达式
   // 要替换的class：activeClass tit 转换结果 :class="isActive? `activeClass tit tit1`:''" => :class="isActive?`${styles.activeClass} ${styles.tit} tit1`:''"
   else if (t.isConditionalExpression(ast)) {
-    const { updatedCountNum } = processConditionalExpression(ast, scssClasses, importName, vueFilePath, startLine)
+    const { updatedCountNum } = processConditionalExpression(
+      ast,
+      scssClasses,
+      importName,
+      vueFilePath,
+      startLine,
+      hasReplacedClassNames,
+    )
     allUpdatedCountNum += updatedCountNum
   }
   // 字符串表达式
   // 要替换的class：activeClass tit 转换结果 :class="'activeClass tit tit2'" => :class="[styles.activeClass, styles.tit, 'tit2']"
   else if (t.isStringLiteral(ast)) {
-    const { newStringExpression, updatedCountNum } = processStringExpressionInClass(ast.value, scssClasses, importName)
+    const { newStringExpression, updatedCountNum } = processStringExpressionInClass(
+      ast.value,
+      scssClasses,
+      importName,
+      hasReplacedClassNames,
+    )
     allUpdatedCountNum += updatedCountNum
     return { newExpression: newStringExpression, updatedCountNum }
   }
   // 模板字符串表达式
   // 要替换的class：activeClass tit 转换结果 :class="`${isActive? 'activeClass':''} tit tit1 ${bar}tit`" => :class="`${isActive?`${styles.activeClass}`:''} ${styles.tit} tit1 ${bar}tit`"
   else if (t.isTemplateLiteral(ast)) {
-    const { updatedCountNum } = processTemplateLiteralExpression(ast, scssClasses, importName, vueFilePath, startLine)
+    const { updatedCountNum } = processTemplateLiteralExpression(
+      ast,
+      scssClasses,
+      importName,
+      vueFilePath,
+      startLine,
+      hasReplacedClassNames,
+    )
     allUpdatedCountNum += updatedCountNum
   } else {
-    logger.warning(vueFilePath, startLine, `Unsupported dynamic class expression type: ${ast.type}.Please check manually!`)
+    logger.warn(vueFilePath, startLine, `Unsupported dynamic class expression type: ${ast.type}.Please check manually!`)
   }
   if (allUpdatedCountNum > 0) {
     // 使用 @babel/generator 将修改后的 AST 转换为代码字符串
@@ -320,13 +404,19 @@ function collectClassReplacements(
   scssClasses: string[],
   importName: string,
   vueFilePath: string,
+  hasReplacedClassNames: Set<string>,
   replacements: ClassReplacementItem[] = [],
 ): { replacements: ClassReplacementItem[]; updatedCount: number } {
   let updatedCount = 0
   node.props.forEach(prop => {
     // 静态class文本处理
     if (prop.type === NodeTypes.ATTRIBUTE && prop.name === "class" && prop.value) {
-      const { newStringExpression, updatedCountNum } = processStringExpressionInClass(prop.value.content, scssClasses, importName)
+      const { newStringExpression, updatedCountNum } = processStringExpressionInClass(
+        prop.value.content,
+        scssClasses,
+        importName,
+        hasReplacedClassNames,
+      )
       if (updatedCountNum > 0) {
         // 记录替换信息
         replacements.push({
@@ -355,6 +445,7 @@ function collectClassReplacements(
         importName,
         vueFilePath,
         startLine,
+        hasReplacedClassNames,
       )
       if (updatedCountNum > 0) {
         replacements.push({
@@ -375,6 +466,7 @@ function collectClassReplacements(
         scssClasses,
         importName,
         vueFilePath,
+        hasReplacedClassNames,
         replacements,
       )
       updatedCount += childUpdatedCount
@@ -386,16 +478,16 @@ function collectClassReplacements(
 /**
  * @description: 转换Vue文件template中的class
  */
-export function updateClassNameInVueTemplate(
+export async function updateClassNameInVueTemplate(
   vueFilePath: string,
   importName: string,
   scssFilePath: string,
-): { status: boolean; updatedCount: number } {
+): Promise<{ status: boolean; updatedCount: number }> {
   try {
     // 读取.vue文件的内容
-    let vueFileContent = fs.readFileSync(vueFilePath, "utf-8")
+    let vueFileContent = await readFile(vueFilePath, "utf-8")
     // 解析.vue文件中的template部分
-    const root = parse(vueFileContent) as RootNode
+    const root = parse(vueFileContent)
     const templateNode = root.children.find(node => node.type === NodeTypes.ELEMENT && node.tag === "template") as
       | ElementNode
       | undefined
@@ -403,16 +495,26 @@ export function updateClassNameInVueTemplate(
       throw new Error("No <template> block found in the Vue file.")
     }
     // 获取.scss文件中所有class名称
-    const scssClasses = getReplacedClassNames(getAllClassNamesFromScssFile(scssFilePath).classNames)
+    const scssClasses = getReplacedClassNames(vueFilePath, (await getAllClassNamesFromScssFile(scssFilePath)).classNames)
+    // 用于后面比较哪些class name没有被替换
+    const hasReplacedClassNames: Set<string> = new Set()
     // 收集替换信息
-    const { replacements, updatedCount } = collectClassReplacements(templateNode, scssClasses, importName, vueFilePath)
+    const { replacements, updatedCount } = collectClassReplacements(
+      templateNode,
+      scssClasses,
+      importName,
+      vueFilePath,
+      hasReplacedClassNames,
+    )
     // 根据收集到的替换信息，从后往前替换，避免偏移量的问题
     replacements.sort((a, b) => b.start - a.start)
     replacements.forEach(({ start, end, value }) => {
       vueFileContent = vueFileContent.slice(0, start) + value + vueFileContent.slice(end)
     })
     // 将更新后的内容写回.vue文件
-    fs.writeFileSync(vueFilePath, vueFileContent, "utf-8")
+    await saveFile(vueFilePath, vueFileContent)
+    // 检查是否有没有替换的class name
+    checkUnreplacedClassNames(scssClasses, hasReplacedClassNames, vueFilePath)
     logger.info(vueFilePath, null, `Class replacement completed with ${updatedCount} updates.`)
     return { status: true, updatedCount }
   } catch (error) {
@@ -424,6 +526,3 @@ export function updateClassNameInVueTemplate(
     return { status: false, updatedCount: 0 }
   }
 }
-
-// 调用示例
-const result = updateClassNameInVueTemplate("D:/学习/code/vue-sfc-to-jsx/src/core/chart.vue", "styles", "/path/to/your/file.scss")

@@ -2,6 +2,7 @@ import { parse } from "@babel/parser"
 import generator from "@babel/generator"
 import traverse from "@babel/traverse"
 import * as t from "@babel/types"
+import { TransformException } from "@/utils/exception"
 
 export function addThisPrefixToIndentifier(code: string): string {
   const ast = parse(code, {
@@ -43,8 +44,7 @@ export function addThisPrefixToIndentifier(code: string): string {
       try {
         path.replaceWith(thisExpression)
       } catch (error) {
-        console.error(`Error when replace ${name} with this.${name} in ${code}`)
-        throw error
+        throw new TransformException(`无法替换Identifier: ${name}`, error);
       }
     },
   })
