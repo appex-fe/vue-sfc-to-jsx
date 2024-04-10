@@ -20,6 +20,7 @@ import { simpleRandomStr, hyphenate, parseVueSfcByFileContent } from "@/utils/co
 import { FileNotFoundException } from "@/utils/exception";
 import { checkFileExists, saveFile } from "@/utils/common";
 import { isNumber } from "@/utils/is";
+import postcssSelectorParser from "postcss-selector-parser"
 
 type CreateScssFileByVueSFCResult = { scssFilePath: string; VueFilePath: string }
 
@@ -193,54 +194,25 @@ export async function insertImportToVueSFC(VueFilePath: string, scssFilePath: st
 }
 
 /**
- * @description: 该函数用于更新并标记CSS类名的作用域信息。它会解析CSS选择器中的类名，并根据提供的作用域（scope）参数更新classNames对象中的类名作用域。
+ * @description: 该函数用于更新并标记CSS类名的作用域信息。根据提供的作用域（scope）参数更新classNames对象中的类名作用域。
  *               如果在classNames中某个类名尚未定义，则将其作用域设置为当前scope；
  *               如果已定义，但其作用域与当前scope不同，则将该类名作用域标记为UNKNOWN，
  *               表示其具有不确定或冲突的作用域。
  * classNames: 一个记录CSS类名及其作用域的对象。
- * selector: CSS选择器字符串，该函数将从中提取所有类名。
+ * className: 类名。
  * scope: 当前处理的CSS规则所属的作用域枚举，可以是LOCAL、GLOBAL或UNKNOWN。
  */
-const updateAndMarkClassScope = (classNames: SelectorInfo["classNames"], selector: string, scope: ClassScopeEnum) => {
-  const classNameReg = /\.([^.:)\s]+)/g
-  let match: RegExpExecArray | null
-  while ((match = classNameReg.exec(selector)) !== null) {
-    const className = match[1]
-    // 如果类名在当前作用域尚未定义直接赋值
-    if (classNames[className] === undefined) {
-      classNames[className] = scope
-    }
-    // 如果类名之前是LOCAL或GLOBAL但和当前作用域不同，则标记为UNKNOWN
-    else if (classNames[className] !== scope) {
-      classNames[className] = ClassScopeEnum.UNKNOWN
-    }
+const updateAndMarkClassScope = (classNames: SelectorInfo["classNames"], className: string, scope: ClassScopeEnum) => {
+  // 如果类名在当前作用域尚未定义直接赋值
+  if (classNames[className] === undefined) {
+    classNames[className] = scope
+  }
+  // 如果类名之前是LOCAL或GLOBAL但和当前作用域不同，则标记为UNKNOWN
+  else if (classNames[className] !== scope) {
+    classNames[className] = ClassScopeEnum.UNKNOWN
   }
 }
 
-/**
- * @description:  处理并更新CSS选择器中的作用域类名。
- *                解析CSS选择器字符串，查找并处理带有作用域的类名（:global(...) 或 :local(...)），
- *                并将解析后的类名及其作用域信息更新到classNames对象中。
- * selector: 包含作用域前缀的CSS选择器字符串，格式如 ":global(.foo)" 或 ":local(.bar .bar1)" 等。
- * scope: 指定要处理的作用域类型，仅支持GLOBAL或LOCAL枚举值
- * classNames: 一个记录CSS类名及其作用域的对象，processScopedSelector会更新这个对象
- */
-function updateScopedClassNames(
-  selector: string,
-  scope: ClassScopeEnum.GLOBAL | ClassScopeEnum.LOCAL,
-  classNames: SelectorInfo["classNames"],
-) {
-  // 根据作用域类型构建相应的正则表达式，用于捕获括号内的类名信息
-  const reg: RegExp = scope === ClassScopeEnum.GLOBAL ? /:global\(([^)]+)\)/ : /:local\(([^)]+)\)/
-  // 使用正则表达式在选择器字符串中匹配作用域声明
-  const match: RegExpMatchArray | null = selector.match(reg)
-  // 如果匹配成功，说明找到了带有作用域的类名定义
-  if (match) {
-    // 提取匹配到的括号内的类名并使用processClassNames函数进行处理，
-    // 将类名的作用域根据当前指定的scope更新到classNames对象中
-    updateAndMarkClassScope(classNames, match[1], scope)
-  }
-}
 
 /**
  * @description: 从SCSS文件中获取所有类名信息
@@ -274,34 +246,26 @@ export async function getAllClassNamesFromScssFile(scssFilePath: string): Promis
   const selectorInfo: SelectorInfo = { classNames: {} };
   // 处理CSS内容，提取类名
   postcss.parse(cssContent).walkRules((rule: Rule) => {
-    // 在给定的字符串中，全局匹配所有的 :global(...) 或 :local(...) 形式的模式，以及其他不包含空格和逗号的连续字符
-    // 例如：:global(.foo) .bar :local(.baz .baz1) .baz2 :global .baz3 :local .baz4 span .type, .default
-    // 匹配结果：[":global(.foo)", ".bar", ":local(.baz .baz1)", ".baz2", ":global", ".baz3", ":local", ".baz4", "span", ".type", ".default]
-    const selectors: string[] = rule.selector.match(/:(global|local)\([^)]+\)|[^ ,]+/g) || [];
-    /**
-     *
-     * 默认将作用域标记(scope)设置为 LOCAL。
-     * 遍历匹配到的选择器：
-     *    - 如果遇到 :global 标记，则将后续选择器的作用域切换为 GLOBAL。
-     *    - 如果遇到 :local 标记，则将后续选择器的作用域切换为 LOCAL。
-     *    - 如果是 :global(...) 形式的选择器，则只将括号内的选择器标记为 GLOBAL，但不改变当前作用域标记(scope)。
-     *    - 如果是 :local(...) 形式的选择器，则只将括号内的选择器标记为 LOCAL，但不改变当前作用域标记(scope)。
-     *    - 如果是普通选择器，则根据当前的作用域标记(scope)对选择器中的类名进行标记。
-     */
-    let scope: ClassScopeEnum = ClassScopeEnum.LOCAL;
-    selectors.forEach(selector => {
-      if (selector === ":global") {
-        scope = ClassScopeEnum.GLOBAL;
-      } else if (selector === ":local") {
-        scope = ClassScopeEnum.LOCAL;
-      } else if (selector.startsWith(":global(")) {
-        updateScopedClassNames(selector, ClassScopeEnum.GLOBAL, selectorInfo.classNames);
-      } else if (selector.startsWith(":local(")) {
-        updateScopedClassNames(selector, ClassScopeEnum.LOCAL, selectorInfo.classNames);
-      } else {
-        updateAndMarkClassScope(selectorInfo.classNames, selector, scope);
-      }
-    });
+    // 使用postcssSelectorParser解析选择器
+    postcssSelectorParser((selectors) => {
+      let scope = ClassScopeEnum.LOCAL;
+      selectors.walk((selector) => {
+        if (selector.type === "pseudo") {
+          if (selector.value === ":global") {
+            scope = ClassScopeEnum.GLOBAL;
+          } else if (selector.value === ":local") {
+            scope = ClassScopeEnum.LOCAL;
+          }
+          // 处理:global(.xx)和:local(.xx)这种带有作用域的类名
+          selector.nodes.forEach((node) => {
+            updateAndMarkClassScope(selectorInfo.classNames, node.value, scope);
+          });
+        } else if (selector.type === "class") {
+          updateAndMarkClassScope(selectorInfo.classNames, selector.value, scope);
+        }
+        // TODO：逗号分隔的选择器还未处理
+      })
+    }).processSync(rule.selector);
   });
   return selectorInfo;
 }
