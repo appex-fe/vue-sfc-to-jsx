@@ -244,6 +244,7 @@ export async function getAllClassNamesFromScssFile(scssFilePath: string): Promis
   const selectorInfo: SelectorInfo = { classNames: {} };
   // 处理CSS内容，提取类名
   postcss.parse(cssContent).walkRules((rule: Rule) => {
+    // 使用rule.selectors而不用rule.selector是因为如果遇到.a :global .b, .c这种情况，.c的scope会受污染
     rule.selectors.forEach((_selectors) => {
       // 使用postcssSelectorParser解析选择器
       postcssSelectorParser((selectors) => {
