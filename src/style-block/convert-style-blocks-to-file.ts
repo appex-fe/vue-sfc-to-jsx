@@ -244,28 +244,28 @@ export async function getAllClassNamesFromScssFile(scssFilePath: string): Promis
   const selectorInfo: SelectorInfo = { classNames: {} };
   // 处理CSS内容，提取类名
   postcss.parse(cssContent).walkRules((rule: Rule) => {
-    rule.selectors.forEach((_selector) => {
-    // 使用postcssSelectorParser解析选择器
-    postcssSelectorParser((selectors) => {
-      let scope = ClassScopeEnum.LOCAL;
-      selectors.walk((selector) => {
-        if (selector.type === "pseudo") {
-          if (selector.value === ":global") {
-            scope = ClassScopeEnum.GLOBAL;
-          } else if (selector.value === ":local") {
-            scope = ClassScopeEnum.LOCAL;
-          }
-          // 处理:global(.xx)和:local(.xx)这种带有作用域的类名
-          selector.nodes.forEach((node) => {
-            if (node.value) {
-              updateAndMarkClassScope(selectorInfo.classNames, node.value, scope);
+    rule.selectors.forEach((_selectors) => {
+      // 使用postcssSelectorParser解析选择器
+      postcssSelectorParser((selectors) => {
+        let scope = ClassScopeEnum.LOCAL;
+        selectors.walk((selector) => {
+          if (selector.type === "pseudo") {
+            if (selector.value === ":global") {
+              scope = ClassScopeEnum.GLOBAL;
+            } else if (selector.value === ":local") {
+              scope = ClassScopeEnum.LOCAL;
             }
-          });
-        } else if (selector.type === "class") {
-          updateAndMarkClassScope(selectorInfo.classNames, selector.value, scope);
-        }
-      })
-    }).processSync(_selector);
+            // 处理:global(.xx)和:local(.xx)这种带有作用域的类名
+            selector.nodes.forEach((node) => {
+              if (node.value) {
+                updateAndMarkClassScope(selectorInfo.classNames, node.value, scope);
+              }
+            });
+          } else if (selector.type === "class") {
+            updateAndMarkClassScope(selectorInfo.classNames, selector.value, scope);
+          }
+        })
+      }).processSync(_selectors);
     })
   });
   return selectorInfo;
