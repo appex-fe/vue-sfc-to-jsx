@@ -9,8 +9,6 @@ import {
   isNamedImports,
   createSourceFile,
   ScriptTarget,
-  factory,
-  createPrinter,
   type ImportSpecifier,
   SourceFile,
 } from "typescript"
