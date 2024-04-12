@@ -25,7 +25,7 @@ const createLogFormat = (flag: "console" | "file", onlyLevel?: string) => {
   return logFormat;
 }
 
-export const logger = winston.createLogger({
+const winstonLogger = winston.createLogger({
   level: "silly",
   format: createLogFormat("console"),
   transports: [
@@ -66,3 +66,54 @@ export const logger = winston.createLogger({
     }),
   ]
 });
+
+// 封装自己的logger以支持可以传入任意多个参数
+export const logger = {
+  error: (...args: unknown[]) => {
+    // 避免对象被打印成[object Object]
+    if (args.length === 1) {
+      return winstonLogger.error(args[0]);
+    }
+    return winstonLogger.error(args.join(" "));
+  },
+  warn: (...args: unknown[]) => {
+    if (args.length === 1) {
+      return winstonLogger.warn(args[0]);
+    }
+    return winstonLogger.warn(args.join(" "));
+  },
+  log: (...args: unknown[]) => {
+    if (args.length === 1) {
+      return winstonLogger.info(args[0]);
+    }
+    return winstonLogger.info(args.join(" "));
+  },
+  info: (...args: unknown[]) => {
+    if (args.length === 1) {
+      return winstonLogger.info(args[0]);
+    }
+    return winstonLogger.info(args.join(" "));
+  },
+  verbose: (...args: unknown[]) => {
+    if (args.length === 1) {
+      return winstonLogger.verbose(args[0]);
+    }
+    return winstonLogger.verbose(args.join(" "));
+  },
+  debug: (...args: unknown[]) => {
+    if (args.length === 1) {
+      return winstonLogger.debug(args[0]);
+    }
+    return winstonLogger.debug(args.join(" "));
+  },
+  silly: (...args: unknown[]) => {
+    if (args.length === 1) {
+      return winstonLogger.silly(args[0]);
+    }
+    return winstonLogger.silly(args.join(" "));
+  },
+};
+
+logger.log("logger init success", "xx");
+logger.error({a: 1, b: "xx"});
+winstonLogger.warn({a: 2, b: "yy"});
