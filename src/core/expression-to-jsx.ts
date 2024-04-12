@@ -1,5 +1,6 @@
 import { ASTExpression } from "vue-template-compiler";
 import { addThisPrefixToIndentifier } from "./add-this-prefix";
+import { logger } from "@/utils/logger";
 
 // 观察node_modules/vue-template-compiler/build.js#L1834 parseText 函数可得
 type TokenItem = string | { "@binding": string }
@@ -32,7 +33,7 @@ export function expressionToJSX(astNode: ASTExpression, cfg: ExpressionToJSXConf
       if (naiveFilterDectector.test(binding)) {
         const msg = `filter is not supported, binding: ${binding}`
         if (actionWhenFilter === "warn") {
-          console.warn(msg)
+          logger.warn(msg)
         } else if (actionWhenFilter === "error") {
           throw new Error(msg)
         }

@@ -2,9 +2,10 @@ import { convertVDeep } from "./convert-vdeep-to-css-module-syntax-in-sfc-style-
 import { createScssFileByVueSFC, insertImportToVueSFC, type ConvertedScssBlock } from "./convert-style-blocks-to-file";
 import { updateClassNameInVueTemplate } from "./update-class-name-in-vue-template";
 import { TransformException } from "@/utils/exception";
+import { logger } from "@/utils/logger";
 
 export async function handleStyleBlock(vueSfcFileUris: string[]) {
-  console.time("同步")
+  const before = performance?.now?.() ?? Date.now()
   for (const uri of vueSfcFileUris) {
     const vDeepResults = await convertVDeep(uri)
     // check start and end
@@ -20,6 +21,7 @@ export async function handleStyleBlock(vueSfcFileUris: string[]) {
     const { importName, VueFilePath } = await insertImportToVueSFC(uri, scssFilePath)
     await updateClassNameInVueTemplate(VueFilePath, importName, scssFilePath)
   }
-  console.timeEnd("同步")
+  const after = performance?.now?.() ?? Date.now()
+  logger.info(`handleStyleBlock cost ${after - before}ms`)
 }
 
