@@ -3,6 +3,7 @@ import scssSyntax from "postcss-scss"
 import selectorParser, { Pseudo, Combinator } from "postcss-selector-parser"
 import { CompilerException } from "@/utils/exception"
 import { parseVueSfcByPath, removeCwd } from "@/utils/common"
+import { logger } from "@/utils/logger"
 
 const isFileScopeTopLevel = (node: postcss.Node): boolean => {
   return !node.parent || node.parent.type === "root"
@@ -34,7 +35,7 @@ const findTopLevelVDeep: Plugin = {
           }).processSync(rule.selector)
         }
       } else {
-        console.warn(`文件${uri}中存在@规则：${rule.toString()}，请手动处理。`)
+        logger.warn(`文件${uri}中存在@规则：${rule.toString()}，请手动处理。`)
       }
     })
   },

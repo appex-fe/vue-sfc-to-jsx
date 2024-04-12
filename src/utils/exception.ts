@@ -1,7 +1,9 @@
+import { logger } from "./logger";
+
 class BaseException extends Error {
   constructor(message: string, cause?: unknown) {
     super(message, { cause });
-    console.error(this.stack ?? this.message);
+    logger.error(this.stack ?? this.message);
   }
 }
 

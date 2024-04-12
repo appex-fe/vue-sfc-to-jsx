@@ -19,6 +19,7 @@ import { FileNotFoundException } from "@/utils/exception";
 import { checkFileExists, saveFile } from "@/utils/common";
 import { isNumber } from "@/utils/is";
 import postcssSelectorParser from "postcss-selector-parser"
+import { logger } from "@/utils/logger";
 
 type CreateScssFileByVueSFCResult = { scssFilePath: string; VueFilePath: string }
 
@@ -60,7 +61,7 @@ export async function getUniqueAbsoluteFilePath(
   }
   let targetAbsoluteFilePath: string = path.resolve(targetFileDirectory, `${filename}.${ext}`)
   while (await checkFileExists(targetAbsoluteFilePath)) {
-    console.log(targetAbsoluteFilePath, null, `同目录下有重名${ext}文件: ${targetAbsoluteFilePath}`)
+    logger.log(targetAbsoluteFilePath, null, `同目录下有重名${ext}文件: ${targetAbsoluteFilePath}`)
     targetAbsoluteFilePath = path.resolve(targetFileDirectory, `${filename}${simpleRandomStr()}.${ext}`)
   }
   return targetAbsoluteFilePath
@@ -136,7 +137,7 @@ function getAllExistingImportNames(node: SourceFile): string[] {
 function getUniqueImportName(vueFilePath: string, importNames: string[]): string {
   let importName = "styles"
   while (importNames.includes(importName)) {
-    console.log(vueFilePath, null, `Vue文件中已存在名为 ${importName} 的导入`)
+    logger.log(vueFilePath, null, `Vue文件中已存在名为 ${importName} 的导入`)
     importName = `styles${simpleRandomStr()}`
   }
   return importName
@@ -292,10 +293,11 @@ export async function removeBlocksFromVueSFC(
 
     // 已经排好序，取最后一个即可
     const minimumStart = positions[positions.length - 1].blockStart
-    return console.log(vueFilePath, minimumStart, `已从Vue文件中删除指定的代码块`)
+    logger.log(vueFilePath, minimumStart, `已从Vue文件中删除指定的代码块`)
+    return
   }
 
-  console.debug("blockTypeOrPositions is blockType")
+  logger.debug("blockTypeOrPositions is blockType")
   // 处理重载
   const parsed: SFCDescriptor = parseVueSfcByFileContent(oldContent)
   if (blockTypeOrPositions === "template") {
@@ -304,7 +306,7 @@ export async function removeBlocksFromVueSFC(
       if (isNumber(start) && isNumber(end)) {
         await removeBlocksFromVueSFC(vueFilePath, [{ blockStart: start, blockEnd: end }], oldContent)
       } else {
-        console.error("无法获取template的开始和结束位置")
+        logger.error("无法获取template的开始和结束位置")
       }
       return
     }
@@ -314,7 +316,7 @@ export async function removeBlocksFromVueSFC(
       if (isNumber(start) && isNumber(end)) {
         await removeBlocksFromVueSFC(vueFilePath, [{ blockStart: start, blockEnd: end }], oldContent)
       } else {
-        console.error("无法获取script的开始和结束位置")
+        logger.error("无法获取script的开始和结束位置")
       }
       return
     }
@@ -324,7 +326,7 @@ export async function removeBlocksFromVueSFC(
       if (positions.every(position => isNumber(position.blockStart) && isNumber(position.blockEnd))) {
         await removeBlocksFromVueSFC(vueFilePath, positions as BlockPosition[], oldContent)
       } else {
-        console.error("无法获取style的开始和结束位置")
+        logger.error("无法获取style的开始和结束位置")
       }
       return
     }
@@ -334,7 +336,7 @@ export async function removeBlocksFromVueSFC(
       if (positions.every(position => isNumber(position.blockStart) && isNumber(position.blockEnd))) {
         await removeBlocksFromVueSFC(vueFilePath, positions as BlockPosition[], oldContent)
       } else {
-        console.error("无法获取customBlocks的开始和结束位置")
+        logger.error("无法获取customBlocks的开始和结束位置")
       }
       return
     }
