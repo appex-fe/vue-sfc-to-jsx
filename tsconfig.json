@@ -28,7 +28,8 @@
       ]
     },
     "types": [
-      "node"
+      "node",
+      "jest",
     ],
     "lib": [
       "esnext",
@@ -40,6 +41,7 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "src/**/*.vue"
+    "src/**/*.vue",
+    "test/**/*.ts",
   ]
 }
