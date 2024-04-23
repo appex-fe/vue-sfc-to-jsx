@@ -22,13 +22,15 @@
     "sass": "^1.72.0",
     "typescript": "^5.3.3",
     "vue-template-compiler": "2.6.x",
-    "winston": "^3.13.0"
+    "winston": "^3.13.0",
+    "yargs": "^17.7.2"
   },
   "devDependencies": {
     "@types/babel__generator": "^7.6.8",
     "@types/babel__traverse": "^7.20.5",
     "@types/lodash": "^4.14.202",
     "@types/node": "^20.10.6",
+    "@types/yargs": "^17.0.32",
     "tsconfig-paths": "^4.2.0",
     "tslib": "^2.6.2"
   }
