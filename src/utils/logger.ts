@@ -113,7 +113,3 @@ export const logger = {
     return winstonLogger.silly(args.join(" "));
   },
 };
-
-logger.log("logger init success", "xx");
-logger.error({a: 1, b: "xx"});
-winstonLogger.warn({a: 2, b: "yy"});

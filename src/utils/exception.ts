@@ -27,3 +27,10 @@ export class TransformException extends BaseException {
     this.name = "TransformException";
   }
 }
+
+export class InvalidSchemaException extends BaseException {
+  constructor(message: string, cause?: unknown) {
+    super(message, cause);
+    this.name = "InvalidSchemaException";
+  }
+}

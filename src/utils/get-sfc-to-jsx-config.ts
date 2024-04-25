@@ -1,32 +1,35 @@
 import { SfcToJsxConfig } from "@/shared/types"
-import { existsSync, writeFileSync } from "fs"
+import { existsSync, readFileSync, writeFileSync } from "fs"
 import { writeFile } from "fs/promises"
 import { checkFileExists } from "./common"
 import { FileNotFoundException } from "./exception"
 import path from "path"
-import { register } from "ts-node";
+import { name } from "../../package.json"
 
-export function loadUserConfig(configPath: string): SfcToJsxConfig {
-  // 注册ts-node以在运行时支持TS
-  register({
-    transpileOnly: true,
-    compilerOptions: {
-      module: "CommonJS"
-    }
-  });
+// export function loadUserConfig(configPath: string): SfcToJsxConfig {
+//   // 注册ts-node以在运行时支持TS
+//   register({
+//     transpileOnly: true,
+//     compilerOptions: {
+//       module: "CommonJS"
+//     }
+//   });
 
-  // 动态导入配置文件
-  const configFile = require(configPath);
+//   // 动态导入配置文件
+//   const configFile = require(configPath);
 
-  // 返回配置对象
-  return configFile.default;
-}
+//   // 返回配置对象
+//   return configFile.default;
+// }
 
 
 type ConfigFileType = "ts" | "js"
 
 function createMetaConfigSourceTsFile() {
-  return `import type { SfcToJsxConfig } from "vue-sfc-to-jsx"
+  // const jsonStr = readFileSync("../../package.json", { encoding: "utf8" })
+  // const name: string = JSON.parse(jsonStr).name
+  return `// import type { SfcToJsxConfig } from "${name}"
+  import type { SfcToJsxConfig } from "src/shared/types"
 
   const config: SfcToJsxConfig = {
     scssAliasResolver: (url: string) => {
@@ -72,11 +75,7 @@ export async function getSfcToJsxConfig(): Promise<SfcToJsxConfig> {
   const userDefinedConfigPath = process.env.USER_DEFINED_CONFIG_PATH
   if (userDefinedConfigPath) {
     if (await checkFileExists(userDefinedConfigPath)) {
-      if (userDefinedConfigPath.endsWith(".ts")) {
-        return loadUserConfig(userDefinedConfigPath)
-      } else {
-        return (await import(userDefinedConfigPath)).default
-      }
+      return (await import(userDefinedConfigPath)).default
     } else {
       throw new FileNotFoundException(`未找到配置文件：${userDefinedConfigPath}`)
     }
@@ -92,11 +91,7 @@ export function getSfcToJsxConfigSync(): SfcToJsxConfig {
   const userDefinedConfigPath = process.env.USER_DEFINED_CONFIG_PATH
   if (userDefinedConfigPath) {
     if (existsSync(userDefinedConfigPath)) {
-      if (userDefinedConfigPath.endsWith(".ts")) {
-        return loadUserConfig(userDefinedConfigPath)
-      } else {
-        return require(userDefinedConfigPath).default
-      }
+      return require(userDefinedConfigPath).default
     } else {
       throw new FileNotFoundException(`未找到配置文件：${userDefinedConfigPath}`)
     }
