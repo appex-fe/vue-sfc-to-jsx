@@ -1,35 +1,17 @@
 import { SfcToJsxConfig } from "@/shared/types"
-import { existsSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, writeFileSync } from "fs"
 import { writeFile } from "fs/promises"
 import { checkFileExists } from "./common"
 import { FileNotFoundException } from "./exception"
 import path from "path"
 import { name } from "../../package.json"
 
-// export function loadUserConfig(configPath: string): SfcToJsxConfig {
-//   // 注册ts-node以在运行时支持TS
-//   register({
-//     transpileOnly: true,
-//     compilerOptions: {
-//       module: "CommonJS"
-//     }
-//   });
-
-//   // 动态导入配置文件
-//   const configFile = require(configPath);
-
-//   // 返回配置对象
-//   return configFile.default;
-// }
-
-
 type ConfigFileType = "ts" | "js"
 
 function createMetaConfigSourceTsFile() {
   // const jsonStr = readFileSync("../../package.json", { encoding: "utf8" })
   // const name: string = JSON.parse(jsonStr).name
-  return `// import type { SfcToJsxConfig } from "${name}"
-  import type { SfcToJsxConfig } from "src/shared/types"
+  return `import type { SfcToJsxConfig } from "${name}"
 
   const config: SfcToJsxConfig = {
     scssAliasResolver: (url: string) => {

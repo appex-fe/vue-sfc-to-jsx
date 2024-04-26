@@ -7,6 +7,10 @@ process.on("uncaughtException", (err) => {
 
 process.on("unhandledRejection", (err) => {
   // TODO: implement better error2string
-  logger.error(err);
+  if (err instanceof Error) {
+    logger.error(err.message);
+  } else {
+    logger.error(String(err));
+  }
   process.exit(1);
 });
