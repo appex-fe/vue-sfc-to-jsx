@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import "./process-event"
 import yargs, { type Arguments } from "yargs";
 import { hideBin } from "yargs/helpers";
 import { interactiveMode } from "./interactive-mode";

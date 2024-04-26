@@ -518,9 +518,7 @@ export async function updateClassNameInVueTemplate(
     logger.info(vueFilePath, null, `Class replacement completed with ${updatedCount} updates.`)
     return { status: true, updatedCount }
   } catch (error) {
-    if (error instanceof Error) {
-      logger.error(vueFilePath, null, error.stack ?? error.message)
-    } else {
+    if (!(error instanceof Error)) {
       logger.error(vueFilePath, null, String(error))
     }
     return { status: false, updatedCount: 0 }
