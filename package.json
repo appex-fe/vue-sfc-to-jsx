@@ -5,7 +5,7 @@
   "main": "./dist/transform.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc && tsc-alias"
+    "build": "rimraf dist && tsc && tsc-alias"
   },
   "bin": {
     "v2j": "./dist/bin.js"
@@ -40,6 +40,7 @@
     "@types/lodash": "^4.14.202",
     "@types/node": "^20.10.6",
     "@types/yargs": "^17.0.32",
+    "rimraf": "^5.0.5",
     "tsc-alias": "^1.8.8",
     "vue-template-compiler": "2.6.x"
   },
