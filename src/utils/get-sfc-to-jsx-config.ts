@@ -19,7 +19,7 @@ function createMetaConfigSourceTsFile() {
     },
   }
 
-  export default config
+  module.exports = config
   `
 }
 

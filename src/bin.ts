@@ -2,6 +2,7 @@
 
 import { spawn } from "child_process";
 import { resolve as pathResolve } from "path";
+import { platform } from "os";
 
 // 获取用户提供的参数（排除前两个默认参数）
 const args: string[] = process.argv.slice(2);
@@ -19,5 +20,6 @@ spawn("npx", [
   pathResolve(__dirname, "cli-engine"),
   ...args,
 ], {
+  shell: platform() === "win32",
   stdio: "inherit",
 });
