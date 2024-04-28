@@ -1,6 +1,6 @@
 {
   "name": "vue-sfc-to-jsx",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "a toolchain for converting Vue SFC to jsx",
   "main": "./dist/transform.js",
   "scripts": {
@@ -45,7 +45,7 @@
     "vue-template-compiler": "2.6.x"
   },
   "peerDependencies": {
-    "typescript": "^5.3.3",
+    "typescript": "5.x",
     "vue-template-compiler": "2.6.x"
   }
 }

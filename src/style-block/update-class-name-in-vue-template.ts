@@ -1,9 +1,9 @@
-import { parse, NodeTypes, ElementNode, RootNode } from "@vue/compiler-dom"
-import { readFile, writeFile } from "node:fs/promises";
+import { parse, NodeTypes, ElementNode } from "@vue/compiler-dom"
+import { readFile } from "node:fs/promises";
 import * as t from "@babel/types"
 import { parseExpression } from "@babel/parser"
 import generate from "@babel/generator"
-import logger from "node:console"
+import { logger } from "@/utils/logger"
 import { ClassScopeEnum, getAllClassNamesFromScssFile } from "./convert-style-blocks-to-file"
 import { saveFile } from "@/utils/common";
 
