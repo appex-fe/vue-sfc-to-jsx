@@ -1,6 +1,6 @@
 {
   "name": "vue-sfc-to-jsx",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "a toolchain for converting Vue SFC to jsx",
   "main": "./dist/transform.js",
   "scripts": {
