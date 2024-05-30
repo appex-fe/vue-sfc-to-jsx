@@ -9,6 +9,13 @@ import path from "path"
 import { type SFCDescriptor, parseComponent } from "vue-template-compiler"
 
 /**
+ * @description: 将字符串首字母大写
+ */
+export const capitalize = (str: string): string => {
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
+/**
  * @description: 将驼峰字符串转换为连字符字符串
  */
 export const hyphenate = (str: string, hyp = "-"): string => {
