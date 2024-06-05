@@ -81,6 +81,8 @@ class ComponentInfo {
   public lifecycleHooks: ts.MethodDeclaration[] = []
   public statementInDataScope: ts.Statement[] = []
   public stores: StoreInfo[] = []
+
+  public isConversionRequired: boolean = false
 }
 
 // 对外暴露的，用于操作 ComponentInfo 实例的工具类
@@ -100,6 +102,7 @@ export class VComponent {
 
   public static set<T extends keyof ComponentInfo>(prop: T, info: ComponentInfo[T]): void {
     if (prop in VComponent.compo) {
+      VComponent.compo.isConversionRequired = true
       VComponent.compo[prop] = info
     }
   }

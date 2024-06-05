@@ -63,7 +63,11 @@ const preGenerateComponentCheck = () => {
 const generateCode = (ast: ts.SourceFile) => {
   const { getCompoInfo, fileUri } = VComponent
   const compo = getCompoInfo()
-  const { components, filters, directives, statementInDataScope } = compo
+  const { isConversionRequired, components, filters, directives, statementInDataScope } = compo
+  if (!isConversionRequired) {
+    // 如果没有检测到 option api，那就什么都不干，直接把原来的 script 代码照搬到新文件
+    return ast.text
+  }
   const compoDecoratorArgs = [components, filters, directives].filter((api): api is ts.PropertyAssignment => !!api)
   const compoClassNode = factory.createClassDeclaration(
     [
@@ -162,11 +166,12 @@ export const convertScript = async (fileUri: string): Promise<void> => {
     newCode = generateCode(ast)
   } else if (["tsx", "jsx"].includes(lang)) {
     // lang 为 tsx、ts 的内容已经是 class component 了，只需要挪到新 tsx 文件里
-    newCode = content.trimStart()
+    newCode = content
   } else {
     logger.warn(fileUri, null, `不支持的 lang 类型：${lang}`)
   }
 
+  newCode = newCode.trimStart()
   if (newCode) {
     const baseName = path.basename(fileUri, path.extname(fileUri))
     const newPath = await getUniqueAbsoluteFilePath(path.dirname(fileUri), baseName, "tsx")
