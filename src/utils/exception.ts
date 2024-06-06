@@ -3,7 +3,7 @@ import { logger } from "./logger";
 class BaseException extends Error {
   constructor(message: string, cause?: unknown) {
     super(message, { cause });
-    logger.error(this.stack ?? this.message);
+    logger.error(this.message);
   }
 }
 
@@ -25,5 +25,12 @@ export class TransformException extends BaseException {
   constructor(message: string, cause?: unknown) {
     super(message, cause);
     this.name = "TransformException";
+  }
+}
+
+export class InvalidSchemaException extends BaseException {
+  constructor(message: string, cause?: unknown) {
+    super(message, cause);
+    this.name = "InvalidSchemaException";
   }
 }

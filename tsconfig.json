@@ -1,9 +1,10 @@
 {
   "compilerOptions": {
-    "rootDir": ".",
+    "declaration": true,
+    "rootDir": "./src",
     "target": "ESNext",
     "module": "commonjs",
-    "outDir": "./out-tsc",
+    "outDir": "./dist",
     "strict": true,
     "jsx": "preserve",
     "jsxFactory": "VueTsxSupport",
@@ -22,6 +23,7 @@
     "baseUrl": ".",
     "allowJs": true,
     "checkJs": false,
+    "skipLibCheck": true,
     "paths": {
       "@/*": [
         "src/*"

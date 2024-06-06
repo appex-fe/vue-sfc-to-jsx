@@ -10,7 +10,7 @@ const createLogFormat = (flag: "console" | "file", onlyLevel?: string) => {
     winston.format.timestamp({
       format: "YYYY-MM-DD HH:mm:ss"
     }),
-    flag !== "file" &&process.stdout.isTTY ? winston.format.colorize({ all: true }) : winston.format.uncolorize(),
+    flag !== "file" && process.stdout.isTTY ? winston.format.colorize({ all: true }) : winston.format.uncolorize(),
     winston.format.printf(
       info => {
         const pattern = `${info.timestamp} [${info.level}]: ${info.message}`;
@@ -113,7 +113,3 @@ export const logger = {
     return winstonLogger.silly(args.join(" "));
   },
 };
-
-logger.log("logger init success", "xx");
-logger.error({a: 1, b: "xx"});
-winstonLogger.warn({a: 2, b: "yy"});
