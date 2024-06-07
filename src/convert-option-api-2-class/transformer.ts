@@ -186,19 +186,35 @@ const handleWatchApi = (node: ts.Expression): void => {
   const properties = ts.isObjectLiteralExpression(node) ? node.properties : []
   const watchers = properties
     .map((prop: ts.ObjectLiteralElementLike) => {
+      //  watch 的配置在 option api 里分两种，
+      //  一种是简易写法：
+      //     onTrial(val) {
+      //       this.newSubscription.onTrial = val
+      //     },
+      //  还有一种是复杂写法：
+      //     editInfo: {
+      //       handler(obj) {},
+      //       deep: true,
+      //     },
+      //  复杂写法中，watch 支持两种配置形式：
+      //  1、PropertyAssignment：handler: function() {}
+      //  2、MethodDeclaration： handler() {}
       if (ts.isPropertyAssignment(prop) && ts.isObjectLiteralExpression(prop.initializer)) {
+        // 这里处理第二种复杂写法的情况
         const { properties } = prop.initializer
-        let handler: ts.PropertyAssignment | undefined
+        let handler: ts.ObjectLiteralElementLike | undefined
         const options = properties.filter(option => {
-          if (ts.isPropertyAssignment(option) && getSourceTextFromTextLikeNode(option.name) === "handler") {
-            // 使用 watch 属性的名称替换 handler 这个名称，便于后续 parseFuncNode 方法来解析
-            handler = factory.updatePropertyAssignment(option, prop.name, option.initializer)
+          if ((ts.isPropertyAssignment(option) || ts.isMethodDeclaration(option)) && getSourceTextFromTextLikeNode(option.name) === "handler") {
+            // 判断到可以处理的 handler 配置后，暂存 handler ，用于后续 parseFuncNode 解析方法四要素
+            handler = option
             return false
           }
           return true
         })
-        return { funcInfo: handler ? parseFuncNode(handler) : null, options }
+        const funcInfo = handler ? parseFuncNode(handler) : null
+        return { funcInfo: funcInfo ? { ...funcInfo, name: prop.name } : null, options }
       }
+      // 这里可以直接处理第一种简易写法的情况
       return { funcInfo: parseFuncNode(prop) }
     })
     .filter((watchInfo): watchInfo is WatchInfo => !!watchInfo.funcInfo)
