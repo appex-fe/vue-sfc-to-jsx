@@ -188,16 +188,16 @@ const handleWatchApi = (node: ts.Expression): void => {
     .map((prop: ts.ObjectLiteralElementLike) => {
       if (ts.isPropertyAssignment(prop) && ts.isObjectLiteralExpression(prop.initializer)) {
         const { properties } = prop.initializer
-        let handler: ts.PropertyAssignment | undefined
+        let handler: ts.ObjectLiteralElementLike | undefined
         const options = properties.filter(option => {
-          if (ts.isPropertyAssignment(option) && getSourceTextFromTextLikeNode(option.name) === "handler") {
-            // 使用 watch 属性的名称替换 handler 这个名称，便于后续 parseFuncNode 方法来解析
-            handler = factory.updatePropertyAssignment(option, prop.name, option.initializer)
+          if ((ts.isPropertyAssignment(option) || ts.isMethodDeclaration(option)) && getSourceTextFromTextLikeNode(option.name) === "handler") {
+            handler = option
             return false
           }
           return true
         })
-        return { funcInfo: handler ? parseFuncNode(handler) : null, options }
+        const funcInfo = handler ? parseFuncNode(handler) : null
+        return { funcInfo: funcInfo ? { ...funcInfo, name: prop.name } : null, options }
       }
       return { funcInfo: parseFuncNode(prop) }
     })

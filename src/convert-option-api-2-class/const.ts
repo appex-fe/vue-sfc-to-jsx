@@ -9,13 +9,18 @@ export const AccessibilityModifier = {
 } as const
 
 const tsxIdentifier = factory.createIdentifier("tsx")
-// 定义 tsx 文件固定使用的 _tsx 声明：public _tsx!: tsx.DeclareProps<tsx.AutoProps<this>>
+// 定义 tsx 文件固定使用的 _tsx 声明：public _tsx!: tsx.DeclareProps<tsx.AutoProps<this>> & tsx.DeclareOnEvents<ComEvents>
 export const tsxPropertyDeclaration = factory.createPropertyDeclaration(
   [AccessibilityModifier.public],
   "_tsx",
   factory.createToken(SyntaxKind.ExclamationToken),
-  factory.createTypeReferenceNode(factory.createQualifiedName(tsxIdentifier, "DeclareProps"), [
-    factory.createTypeReferenceNode(factory.createQualifiedName(tsxIdentifier, "AutoProps"), [factory.createThisTypeNode()]),
+  factory.createIntersectionTypeNode([
+    factory.createTypeReferenceNode(factory.createQualifiedName(tsxIdentifier, "DeclareProps"), [
+      factory.createTypeReferenceNode(factory.createQualifiedName(tsxIdentifier, "AutoProps"), [factory.createThisTypeNode()]),
+    ]),
+    factory.createTypeReferenceNode(factory.createQualifiedName(tsxIdentifier, "DeclareOnEvents"), [
+      factory.createTypeReferenceNode(factory.createIdentifier("ComEvents"))
+    ])
   ]),
   undefined,
 )
